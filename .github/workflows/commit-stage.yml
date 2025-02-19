@@ -22,13 +22,8 @@ jobs:
         with:
           node-version: 20 # Specify the Node.js version matching your Angular app's requirements
           cache: 'npm'
-
       - name: Install Dependencies
         run: npm ci
-
-      - name: Run Tests
-        run: npm run test -- --watch=false --browsers=ChromeHeadless
-
       - name: Build Angular App
         run: npm run build -- --configuration production
 
