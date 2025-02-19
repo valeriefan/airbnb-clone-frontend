@@ -1,31 +1,77 @@
-name: Build and Deploy
+name: Commit Stage
+on: push
 
-on:
-  push:
-    branches:
-      - master
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: valeriefan/airbnb-clone-frontend
+  VERSION: latest
+
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+  build:
+    name: Build and Test
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+    permissions:
+      contents: read
+      security-events: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v1
-      - uses: actions/setup-node@v1 #this installs node and npm for us
+      - name: Checkout the source code
+        uses: actions/checkout@v3
+      - name: Setup Node.js $
+        uses: actions/setup-node@v3
         with:
-          node-version: '22.x'
-      - uses: actions/cache@v1
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          node-version: $
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm run test:ci
       - name: Build
-        run: |
-          npm install
-          npm run-script deploy
-      - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@releases/v3
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: gh-pages
-          FOLDER: dist/angular-ci-cd
+        run: npm run build
+#  package:
+#    name: Package and Publish
+#    if: ${{ github.ref == 'refs/heads/master' }}
+#    needs: [ build ]
+#    runs-on: ubuntu-22.04
+#    permissions:
+#      contents: read
+#      packages: write
+#      security-events: write
+#    steps:
+#      - name: Checkout source code
+#        uses: actions/checkout@v4
+#      - name: Set up Pack CLI
+#        uses: buildpacks/github-actions/setup-pack@v5.5.1
+#      - name: Build SPA
+#        run: |
+#          chmod +x gradlew
+#          ./gradlew buildAngular
+#      - name: Package SPA
+#        run: |
+#          pack build ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
+#            --buildpack gcr.io/paketo-buildpacks/nginx \
+#            --builder paketobuildpacks/builder:base \
+#            -p dist
+#      - name: OCI image vulnerability scanning
+#        uses: anchore/scan-action@v3
+#        id: scan
+#        with:
+#          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+#          fail-build: false
+#          severity-cutoff: high
+#      - name: Upload vulnerability report
+#        uses: github/codeql-action/upload-sarif@v2
+#        if: success() || failure()
+#        with:
+#          sarif_file: ${{ steps.scan.outputs.sarif }}
+#      - name: Log into container registry
+#        uses: docker/login-action@v3
+#        with:
+#          registry: ${{ env.REGISTRY }}
+#          username: ${{ github.actor }}
+#          password: ${{ secrets.GITHUB_TOKEN }}
+#      - name: Publish container image
+#        run: docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
