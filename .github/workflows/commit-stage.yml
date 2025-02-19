@@ -1,77 +1,66 @@
-name: Commit Stage
-on: push
+name: CI/CD Pipeline
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: valeriefan/airbnb-clone-frontend
-  VERSION: latest
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
   build:
-    name: Build and Test
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        node-version: [18.x]
-    permissions:
-      contents: read
-      security-events: write
+    name: Build and Test Angular App
+    runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout the source code
+      - name: Checkout Code
         uses: actions/checkout@v3
-      - name: Setup Node.js
+
+      - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 18.x
+          node-version: 20 # Specify the Node.js version matching your Angular app's requirements
           cache: 'npm'
-          cache-dependency-path: package-lock.json
-      - name: Install dependencies
+
+      - name: Install Dependencies
         run: npm ci
-      - name: Run tests
-        run: npm run test
-      - name: Build
-        run: npm run build
-#  package:
-#    name: Package and Publish
-#    if: ${{ github.ref == 'refs/heads/master' }}
-#    needs: [ build ]
-#    runs-on: ubuntu-22.04
-#    permissions:
-#      contents: read
-#      packages: write
-#      security-events: write
-#    steps:
-#      - name: Checkout source code
-#        uses: actions/checkout@v4
-#      - name: Set up Pack CLI
-#        uses: buildpacks/github-actions/setup-pack@v5.5.1
-#      - name: Build SPA
-#        run: |
-#          chmod +x gradlew
-#          ./gradlew buildAngular
-#      - name: Package SPA
-#        run: |
-#          pack build ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
-#            --buildpack gcr.io/paketo-buildpacks/nginx \
-#            --builder paketobuildpacks/builder:base \
-#            -p dist
-#      - name: OCI image vulnerability scanning
-#        uses: anchore/scan-action@v3
-#        id: scan
-#        with:
-#          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
-#          fail-build: false
-#          severity-cutoff: high
-#      - name: Upload vulnerability report
-#        uses: github/codeql-action/upload-sarif@v2
-#        if: success() || failure()
-#        with:
-#          sarif_file: ${{ steps.scan.outputs.sarif }}
-#      - name: Log into container registry
-#        uses: docker/login-action@v3
-#        with:
-#          registry: ${{ env.REGISTRY }}
-#          username: ${{ github.actor }}
-#          password: ${{ secrets.GITHUB_TOKEN }}
-#      - name: Publish container image
-#        run: docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+
+      - name: Run Tests
+        run: npm run test -- --watch=false --browsers=ChromeHeadless
+
+      - name: Build Angular App
+        run: npm run build -- --configuration production
+
+  deploy:
+    name: Deploy Angular App
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Angular App
+        run: npm run build -- --configuration production
+
+      - name: Prepare Package
+        run: |
+          mkdir -p package
+          cp -R dist/airbnb-clone-front/* package/
+          echo "{ \"name\": \"airbnb-clone-front\", \"version\": \"1.0.0\", \"main\": \"index.html\" }" > package/package.json
+
+      - name: Publish to GitHub Registry
+        run: npm publish package --registry=https://npm.pkg.github.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
