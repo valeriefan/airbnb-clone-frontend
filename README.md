@@ -1,6 +1,8 @@
-# Airbnb clone
+# Airbnb clone - frontend
 
-[Spring boot Backend](https://github.com/C0de-cake/airbnb-clone-backend)
+Angular frontend of the airbnb clone
+
+[Angular Frontend](https://github.com/valeriefan/airbnb-clone-backend)
 
 ### Features:
 - Booking management for travelers
